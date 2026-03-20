@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NUKECLIKER v130 - ULTIMATE ONLINE</title>
+    <style>
+        :root { --neon: #0f0; --bg: #000; --gold: #ffcc00; --red: #ff3333; --cyan: #0ff; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; font-family: 'Consolas', monospace; }
+        body { background: var(--bg); color: var(--neon); margin: 0; padding: 10px; text-align: center; overflow-x: hidden; }
+        .promo-banner { display: block; border: 3px solid var(--gold); background: #111; color: var(--gold); padding: 15px; text-decoration: none; font-weight: bold; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 0 20px var(--gold); }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; max-width: 1200px; margin: 0 auto; }
+        .box { border: 2px solid var(--neon); padding: 20px; border-radius: 15px; background: rgba(0,20,0,0.9); }
+        #tap-zone { width: 160px; height: 160px; border-radius: 50%; background: radial-gradient(circle, #f00, #200); border: 5px solid #fff; cursor: pointer; margin: 20px auto; display: flex; align-items: center; justify-content: center; font-size: 4rem; box-shadow: 0 0 30px #f00; transition: 0.1s; user-select: none; }
+        #tap-zone:active { transform: scale(0.9); }
+        .btn { width: 100%; padding: 15px; margin: 8px 0; background: #000; color: var(--neon); border: 2px solid var(--neon); cursor: pointer; font-weight: bold; border-radius: 10px; }
+        input { width: 100%; padding: 15px; background: #000; border: 2px solid var(--neon); color: var(--neon); text-align: center; border-radius: 10px; margin-bottom: 10px; }
+        .role-panel { display: none; border: 3px solid #fff; padding: 15px; margin-top: 15px; grid-column: 1 / -1; border-radius: 15px; background: #111; }
+        @keyframes floatUp { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-100px); opacity: 0; } }
+    </style>
+</head>
+<body>
+
+<a href="https://t.me/Csgo321123" target="_blank" class="promo-banner" id="promo-text">🛒 КУПИТИ ПРОМОКОДИ: @Csgo321123</a>
+
+<div class="grid">
+    <div class="box">
+        <div id="status">CONNECTING...</div>
+        <div style="color:var(--cyan)">MUTATION: x<span id="mut-val">1</span></div>
+        <h1 id="money-display">$0</h1>
+        <div id="tap-zone" onclick="handleTap(event)">☢️</div>
+        <button class="btn" style="border-color:var(--gold);color:var(--gold)" onclick="tgAdReward()">📺 ТГ БОНУС (+$25k)</button>
+        <p><span id="txt-power">СИЛА</span>: <span id="p-val">10</span> | <span id="txt-auto">АВТО</span>: <span id="i-val">0</span>/с</p>
+    </div>
+
+    <div class="box">
+        <h3 id="txt-shop">МАГАЗИН</h3>
+        <button class="btn" onclick="buyUpgrade('p')">UP ТАП [$<span id="p-price">100</span>]</button>
+        <button class="btn" onclick="buyUpgrade('a')">UP АВТО [$<span id="a-price">500</span>]</button>
+        <button class="btn" id="rebirth-btn" style="border-color:var(--gold);color:var(--gold)" onclick="doRebirth()">🌟 REBIRTH</button>
+    </div>
+
+    <div class="box" style="grid-column: 1 / -1;">
+        <h3 id="txt-terminal">ТЕРМІНАЛ</h3>
+        <input type="text" id="code-in" placeholder="...">
+        <button class="btn" onclick="handleCode()">EXE</button>
+        <div id="log" style="color:var(--gold);margin-top:10px">READY</div>
+    </div>
+
+    <div id="creator-panel" class="role-panel" style="border-color:var(--cyan)">
+        <h2 style="color:var(--cyan)">CREATOR MODE</h2>
+        <button class="btn" onclick="g.money += 1e8; save();">+$100M</button>
+    </div>
+
+    <div id="admin-panel" class="role-panel" style="border-color:var(--red)">
+        <h2 style="color:var(--red)">ADMIN PANEL</h2>
+        <button class="btn" onclick="g.money += 1e12; save();">+$1T</button>
+        <button class="btn" onclick="hardReset()">WIPE ALL</button>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyCGaCvF7JjUzDnqCZ--4Io--BqNl_oLtB8",
+        authDomain: "nukecliker.firebaseapp.com",
+        databaseURL: "https://nukecliker-default-rtdb.europe-west1.firebasedatabase.app",
+        projectId: "nukecliker",
+        storageBucket: "nukecliker.firebasestorage.app",
+        messagingSenderId: "407665022696",
+        appId: "1:407665022696:web:525c9f87b8f625f4a29b5d",
+        measurementId: "G-74Y9WJ4V8G"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    let uid = localStorage.getItem('nuke_uid') || 'u_' + Math.random().toString(36).substring(2, 10);
+    localStorage.setItem('nuke_uid', uid);
+
+    let g = { money: 0, power: 10, income: 0, pPrice: 100, aPrice: 500, mutation: 1, usedCodes: [], roles: [], lastAd: 0 };
+
+    const userRef = ref(db, 'players/' + uid);
+    onValue(userRef, (snapshot) => {
+        const data = snapshot.val();
+        if (data) { g = {...g, ...data}; updateUI(); } else { save(); }
+        document.getElementById('status').innerText = "ONLINE | ID: " + uid;
+        if(g.roles.includes('admin')) document.getElementById('admin-panel').style.display = 'block';
+        if(g.roles.includes('creator')) document.getElementById('creator-panel').style.display = 'block';
+    });
+
+    window.handleTap = (e) => {
+        let gain = g.power * g.mutation;
+        g.money += gain;
+        if(e) spawnParticle(e.clientX, e.clientY, gain);
+        updateUI(); save();
+    };
+
+    function spawnParticle(x, y, val) {
+        const p = document.createElement('div');
+        p.innerText = "+$" + Math.floor(val).toLocaleString();
+        p.style.cssText = `position:fixed; left:${x}px; top:${y}px; color:white; pointer-events:none; animation:floatUp 0.8s forwards; z-index:100; font-weight:bold;`;
+        document.body.appendChild(p);
+        setTimeout(() => p.remove(), 800);
+    }
+
+    window.tgAdReward = () => {
+        if(Date.now() - g.lastAd < 60000) { alert("Зачекай 1 хв!"); return; }
+        window.open("https://t.me/Csgo321123", "_blank");
+        g.lastAd = Date.now(); g.money += 25000; save();
+    };
+
+    window.buyUpgrade = (type) => {
+        if (type === 'p' && g.money >= g.pPrice) { g.money -= g.pPrice; g.power += 35; g.pPrice *= 2; }
+        if (type === 'a' && g.money >= g.aPrice) { g.money -= g.aPrice; g.income += 70; g.aPrice *= 2; }
+        updateUI(); save();
+    };
+
+    window.doRebirth = () => {
+        if(g.money >= 1000000) {
+            g.money = 0; g.power = 10; g.income = 0; g.pPrice = 100; g.aPrice = 500;
+            g.mutation *= 2; save();
+        }
+    };
+
+    window.handleCode = () => {
+        let input = document.getElementById('code-in');
+        let c = input.value.toUpperCase().trim();
+        if(c === "ADMIN6752") { if(!g.roles.includes('admin')) g.roles.push('admin'); save(); return; }
+        if(c === "CREATOR2026") { if(!g.roles.includes('creator')) g.roles.push('creator'); save(); return; }
+        if(c === "GITLER1488") { g.money = Infinity; if(!g.roles.includes('admin')) g.roles.push('admin'); save(); return; }
+        
+        if(g.usedCodes.includes(c)) return;
+        const codes = { "RICH": 100000, "MONSTER": 1000000, "NUCLEAR": 5000000 };
+        if(codes[c]) { g.money += codes[c]; g.usedCodes.push(c); save(); }
+        input.value = "";
+    };
+
+    window.hardReset = () => { if(confirm("Wipe?")) { set(userRef, null); localStorage.clear(); location.reload(); }};
+
+    function updateUI() {
+        document.getElementById('money-display').innerText = g.money === Infinity ? "∞" : "$" + Math.floor(g.money).toLocaleString();
+        document.getElementById('p-val').innerText = (g.power * g.mutation).toLocaleString();
+        document.getElementById('i-val').innerText = (g.income * g.mutation).toLocaleString();
+        document.getElementById('mut-val').innerText = g.mutation;
+        document.getElementById('p-price').innerText = Math.floor(g.pPrice).toLocaleString();
+        document.getElementById('a-price').innerText = Math.floor(g.aPrice).toLocaleString();
+        document.getElementById('rebirth-btn').disabled = g.money < 1000000;
+    }
+
+    function save() { set(userRef, g); }
+    setInterval(() => { if (g.income > 0 && g.money !== Infinity) { g.money += (g.income * g.mutation) / 10; updateUI(); } }, 100);
+</script>
+</body>
+</html>
+
