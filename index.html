@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Nuke Inc. Clicker</title>
+    
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, set, get, child, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+        // ТВОЇ НАЛАШТУВАННЯ FIREBASE (Залиш свої дані тут)
+        const firebaseConfig = {
+            databaseURL: "https://nuke-cliker-default-rtdb.europe-west1.firebasedatabase.app/"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        // --- ІНІЦІАЛІЗАЦІЯ TELEGRAM ---
+        const tg = window.Telegram.WebApp;
+        tg.expand(); // Розгортаємо на весь екран
+        tg.setHeaderColor('#000000');
+        
+        const userId = tg.initDataUnsafe?.user?.id || "guest";
+        const userName = tg.initDataUnsafe?.user?.first_name || "Гравець";
+
+        // --- ЗМІННІ ГРИ ---
+        let score = 0;
+        let clickPower = 1;
+        let mutationLevel = 0;
+        
+        const mutations = [
+            { name: "Стабільний атом", color: "#fff", threshold: 0 },
+            { name: "Зелений ізотоп", color: "#32CD32", threshold: 500 },
+            { name: "Блакитне випромінювання", color: "#00BFFF", threshold: 2500 },
+            { name: "Фіолетова матерія", color: "#8A2BE2", threshold: 7000 },
+            { name: "Ядерна сингулярність", color: "#ff4500", threshold: 15000 }
+        ];
+
+        // --- ЗАВАНТАЖЕННЯ ДАНИХ З FIREBASE ---
+        const userRef = ref(db, 'users/' + userId);
+        get(userRef).then((snapshot) => {
+            if (snapshot.exists()) {
+                const data = snapshot.val();
+                score = data.score || 0;
+                clickPower = data.clickPower || 1;
+                updateUI();
+                checkMutation(true);
+            }
+        });
+
+        // --- ФУНКЦІЯ КЛІКУ ---
+        window.doClick = function(event) {
+            score += clickPower;
+            
+            // Вібрація (Telegram Haptic)
+            if (tg.HapticFeedback) {
+                tg.HapticFeedback.impactOccurred('medium');
+            }
+
+            showClickEffect(event);
+            checkMutation();
+            updateUI();
+            saveData();
+        };
+
+        // --- ЕФЕКТ ЦИФР +1 ---
+        function showClickEffect(e) {
+            const effect = document.createElement('div');
+            effect.className = 'click-effect';
+            effect.innerText = `+${clickPower}`;
+            
+            const x = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+            const y = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+            
+            effect.style.left = `${x}px`;
+            effect.style.top = `${y}px`;
+            effect.style.color = mutations[mutationLevel].color;
+            
+            document.body.appendChild(effect);
+            setTimeout(() => effect.remove(), 800);
+        }
+
+        // --- ЛОГІКА МУТАЦІЙ ---
+        function checkMutation(silent = false) {
+            let current = mutations.findLast(m => score >= m.threshold);
+            let newIndex = mutations.indexOf(current);
+
+            if (newIndex > mutationLevel) {
+                mutationLevel = newIndex;
+                clickPower = 1 + (mutationLevel * 3);
+                
+                document.getElementById('rocket').style.filter = `drop-shadow(0 0 20px ${current.color})`;
+                document.getElementById('mutation-name').innerText = current.name;
+                document.getElementById('mutation-name').style.color = current.color;
+
+                if (!silent) {
+                    tg.showScanQrPopup({ text: `🧬 МУТАЦІЯ: ${current.name}!` }); 
+                    // Або просто сповіщення:
+                    tg.HapticFeedback.notificationOccurred('success');
+                }
+            }
+        }
+
+        // --- ПАСИВНИЙ ДОХІД (РАДІАЦІЯ) ---
+        setInterval(() => {
+            let passive = mutationLevel * 2;
+            if (passive > 0) {
+                score += passive;
+                updateUI();
+                saveData();
+            }
+        }, 2000);
+
+        // --- ОНОВЛЕННЯ ІНТЕРФЕЙСУ ---
+        function updateUI() {
+            document.getElementById('score-display').innerText = Math.floor(score).toLocaleString();
+            document.getElementById('power-display').innerText = `Сила кліку: ${clickPower}`;
+        }
+
+        // --- ЗБЕРЕЖЕННЯ ---
+        function saveData() {
+            set(userRef, {
+                score: score,
+                clickPower: clickPower,
+                name: userName
+            });
+        }
+    </script>
+
+    <style>
+        body {
+            margin: 0;
+            background: radial-gradient(circle, #1a1a1a 0%, #000 100%);
+            color: white;
+            font-family: 'Segoe UI', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
+            touch-action: manipulation;
+        }
+
+        #score-container {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        #score-display {
+            font-size: 48px;
+            font-weight: bold;
+            text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+        }
+
+        #mutation-name {
+            font-size: 18px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-top: 5px;
+        }
+
+        #rocket {
+            width: 250px;
+            height: 250px;
+            cursor: pointer;
+            transition: transform 0.1s active;
+            z-index: 10;
+        }
+
+        #rocket:active {
+            transform: scale(0.92);
+        }
+
+        .click-effect {
+            position: absolute;
+            font-weight: bold;
+            font-size: 28px;
+            pointer-events: none;
+            animation: floatUp 0.8s ease-out forwards;
+            z-index: 100;
+        }
+
+        @keyframes floatUp {
+            0% { transform: translateY(0); opacity: 1; }
+            100% { transform: translateY(-100px); opacity: 0; }
+        }
+
+        #stats {
+            position: absolute;
+            bottom: 30px;
+            color: #888;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body onmousedown="return false">
+
+    <div id="score-container">
+        <div id="score-display">0</div>
+        <div id="mutation-name">Стабільний атом</div>
+    </div>
+
+    <img id="rocket" src="https://raw.githubusercontent.com/klufinskuydenus-jpg/Yaderka_cliker/main/IMG_20260318_203920.png" 
+         onclick="doClick(event)" alt="Rocket">
+
+    <div id="stats">
+        <div id="power-display">Сила кліку: 1</div>
+    </div>
+
+</body>
+</html>
+
