@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Nuke Inc: Cloud</title>
+    
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+
+    <style>
+        :root { --neon: #0f0; --bg: #000; --gold: #ffcc00; --red: #ff3333; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; font-family: 'Consolas', monospace; }
+        body { background: var(--bg); color: var(--neon); margin: 0; padding: 0; text-align: center; }
+
+        .header { background: #111; padding: 10px; border-bottom: 2px solid var(--neon); display: flex; justify-content: space-between; font-size: 0.8rem; }
+        #owner-ui { display: none; background: #1a1a00; border: 2px solid var(--gold); margin: 10px; padding: 10px; border-radius: 10px; }
+
+        #score { font-size: 3rem; font-weight: bold; margin: 15px 0; text-shadow: 0 0 15px var(--neon); }
+        
+        #nuke-svg { width: 180px; height: 180px; cursor: pointer; filter: drop-shadow(0 0 15px var(--neon)); transition: 0.1s; margin: 20px auto; display: block; }
+        #nuke-svg:active { transform: scale(0.85); }
+
+        .tabs { display: flex; position: fixed; bottom: 0; width: 100%; background: #111; border-top: 1px solid var(--neon); z-index: 10; }
+        .tab { flex: 1; padding: 15px; cursor: pointer; font-weight: bold; color: var(--neon); text-align: center; }
+        .tab.active { background: var(--neon); color: #000; }
+
+        .view { display: none; padding: 20px; padding-bottom: 80px; }
+        .view.active { display: block; }
+
+        .item { background: #080808; border: 1px solid var(--neon); border-radius: 10px; padding: 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .btn { padding: 10px 15px; background: var(--neon); color: #000; border: none; font-weight: bold; border-radius: 5px; cursor: pointer; }
+        input { width: 100%; padding: 15px; background: #000; border: 2px solid var(--neon); color: var(--neon); text-align: center; margin-bottom: 10px; border-radius: 10px; font-size: 1.2rem; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <span>OWNER: <a href="https://t.me/Csgo321123" style="color:var(--gold)">@Csgo321123</a></span>
+    <span id="cloud-status" style="color:gray;">Cloud: Off</span>
+</div>
+
+<div id="owner-ui">
+    <h3 style="color:var(--gold); margin:0;">👑 GOD MODE</h3>
+    <button id="god-btn" class="btn" style="background:var(--gold); margin-top:10px; width:100%;" onclick="toggleInfinite()">УВІМКНУТИ БЕЗКІНЕЧНІСТЬ</button>
+</div>
+
+<div id="main-view" class="view active">
+    <div id="score">0</div>
+    <div id="reb-info" style="color:var(--gold); font-weight:bold;">REBIRTHS: 0</div>
+
+    <svg id="nuke-svg" viewBox="0 0 100 100" onclick="handleTap(event)">
+        <path d="M50 5 L35 40 L35 80 L65 80 L65 40 Z" fill="currentColor" />
+        <path d="M35 80 L20 95 L80 95 L65 80 Z" fill="currentColor" opacity="0.6" />
+        <circle cx="50" cy="55" r="7" fill="#000" />
+    </svg>
+    
+    <button class="btn" style="background:var(--red); color:white; width:100%;" onclick="window.open('https://t.me/nuke_cliker')">📢 @nuke_cliker</button>
+</div>
+
+<div id="shop-view" class="view">
+    <div class="item"><div><b>Сила тапу</b><br><small id="p-lvl-txt">Lvl 1</small></div><button id="p-btn" class="btn" onclick="buy('p')">$<span id="p-cost">100</span></button></div>
+    <div class="item"><div><b>Завод (Авто)</b><br><small id="a-lvl-txt">Lvl 0</small></div><button id="a-btn" class="btn" onclick="buy('a')">$<span id="a-cost">500</span></button></div>
+    <div style="border: 2px dashed var(--gold); padding: 15px; border-radius: 10px; margin-top: 20px;">
+        <h3 style="color:var(--gold)">РЕБІРТ</h3>
+        <button id="r-btn" class="btn" style="background:var(--gold)" onclick="doRebirth()">Скинути за x2 бонус</button>
+    </div>
+</div>
+
+<div id="promo-view" class="view">
+    <h3>ПРОМОКОДИ (MULTIPLE)</h3>
+    <input type="text" id="promo-in" placeholder="ВВЕДІТЬ ТУТ...">
+    <button class="btn" style="width:100%" onclick="usePromo()">АКТИВУВАТИ</button>
+</div>
+
+<div class="tabs">
+    <div class="tab active" onclick="switchTab('main', this)">ГОЛОВНА</div>
+    <div class="tab" onclick="switchTab('shop', this)">МАГАЗИН</div>
+    <div class="tab" onclick="switchTab('promo', this)">КОДИ</div>
+</div>
+
+<script>
+    // 1. НАЛАШТУВАННЯ FIREBASE (Встав сюди свої дані з Firebase Console)
+    const firebaseConfig = {
+        apiKey: "ТВІЙ_API_KEY",
+        databaseURL: "https://ТВІЙ_ПРОЕКТ.firebaseio.com",
+        projectId: "ТВІЙ_ID",
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    const tg = window.Telegram.WebApp;
+    tg.expand();
+    const user = tg.initDataUnsafe?.user || { id: "local_user", username: "guest" };
+
+    // 2. ДАНІ ГРАВЦЯ
+    let g = { m: 0, p: 1, a: 0, pp: 100, ap: 500, r: 0, mult: 1, isInf: false, pLvl: 1, aLvl: 0 };
+
+    // 3. ФУНКЦІЯ ЗБЕРЕЖЕННЯ (Хмара + LocalStorage)
+    function saveAll() {
+        localStorage.setItem('nuke_cloud_save', JSON.stringify(g));
+        db.ref('users/' + user.id).set(g);
+    }
+
+    // 4. ЗАВАНТАЖЕННЯ (Спочатку хмара)
+    db.ref('users/' + user.id).on('value', (snapshot) => {
+        if(snapshot.exists()) {
+            g = snapshot.val();
+            document.getElementById('cloud-status').innerText = "Cloud: On";
+            document.getElementById('cloud-status').style.color = "var(--neon)";
+            updateUI();
+        } else {
+            // Якщо в хмарі нема, беремо з LocalStorage
+            let localData = localStorage.getItem('nuke_cloud_save');
+            if(localData) g = JSON.parse(localData);
+            updateUI();
+        }
+    });
+
+    if(user.username === "Csgo321123") document.getElementById('owner-ui').style.display = 'block';
+
+    function updateUI() {
+        const s = document.getElementById('score');
+        if(g.isInf) { s.innerText = "∞∞∞∞∞∞∞∞"; s.style.color = "var(--gold)"; }
+        else { s.innerText = Math.floor(g.m).toLocaleString(); s.style.color = "var(--neon)"; }
+        
+        document.getElementById('p-cost').innerText = Math.floor(g.pp).toLocaleString();
+        document.getElementById('a-cost').innerText = Math.floor(g.ap).toLocaleString();
+        document.getElementById('p-lvl-txt').innerText = `Lvl ${g.pLvl}`;
+        document.getElementById('a-lvl-txt').innerText = `Lvl ${g.aLvl}`;
+        document.getElementById('reb-info').innerText = `REBIRTHS: ${g.r} (x${g.mult.toFixed(1)})`;
+        
+        document.getElementById('p-btn').disabled = g.m < g.pp && !g.isInf;
+        document.getElementById('a-btn').disabled = g.m < g.ap && !g.isInf;
+    }
+
+    function handleTap(e) {
+        if(!g.isInf) g.m += (g.p * g.mult);
+        if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+        saveAll(); updateUI();
+    }
+
+    function toggleInfinite() {
+        g.isInf = !g.isInf;
+        g.m = g.isInf ? 9e30 : 0;
+        saveAll(); updateUI();
+    }
+
+    function buy(type) {
+        if(type === 'p' && (g.m >= g.pp || g.isInf)) { if(!g.isInf) g.m -= g.pp; g.p += 5; g.pLvl++; g.pp *= 2.1; }
+        if(type === 'a' && (g.m >= g.ap || g.isInf)) { if(!g.isInf) g.m -= g.ap; g.a += 10; g.aLvl++; g.ap *= 2.5; }
+        saveAll(); updateUI();
+    }
+
+    function doRebirth() {
+        if(g.m >= 1000000 || g.isInf) {
+            g.m = 0; g.p = 1; g.a = 0; g.pp = 100; g.ap = 500; g.pLvl = 1; g.aLvl = 0;
+            g.r++; g.mult += 1;
+            saveAll(); updateUI();
+        }
+    }
+
+    function usePromo() {
+        let val = document.getElementById('promo-in').value.toUpperCase().trim();
+        const codes = { "RICH": 100000, "MONSTER": 1000000, "ULTRA": 500000, "CREATOR2026": 50000000, "ADMIN6752": 100000000 };
+        if(codes[val]) { g.m += codes[val]; alert("ПРИЙНЯТО!"); saveAll(); updateUI(); }
+    }
+
+    function switchTab(id, el) {
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.getElementById(id + '-view').classList.add('active');
+        el.classList.add('active');
+    }
+
+    setInterval(() => { if(g.a > 0 && !g.isInf) { g.m += (g.a * g.mult) / 10; updateUI(); saveAll(); } }, 100);
+</script>
+</body>
+</html>
+
