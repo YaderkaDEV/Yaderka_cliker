@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Nuke Inc: Ultimate</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root { --neon: #0f0; --bg: #000; --gold: #ffcc00; --red: #ff3333; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; font-family: 'Consolas', monospace; }
+        body { background: var(--bg); color: var(--neon); margin: 0; text-align: center; overflow: hidden; height: 100vh; }
+        
+        .header { background: #111; padding: 10px; border-bottom: 2px solid var(--neon); display: flex; justify-content: space-between; font-size: 0.7rem; }
+        #score { font-size: 2.8rem; font-weight: bold; margin: 10px 0; text-shadow: 0 0 10px var(--neon); }
+        
+        .view { display: none; padding: 15px; height: 80vh; overflow-y: auto; padding-bottom: 100px; }
+        .view.active { display: block; }
+        
+        /* МІНІ-ГРИ */
+        #drone { position: absolute; width: 55px; display: none; z-index: 100; cursor: pointer; filter: drop-shadow(0 0 8px var(--red)); }
+        .energy { position: absolute; width: 45px; height: 45px; background: var(--neon); border-radius: 50%; box-shadow: 0 0 20px var(--neon); z-index: 90; cursor: pointer; }
+
+        /* КАРТКИ ТА КНОПКИ */
+        .card { background: #0a0a0a; border: 1px solid var(--neon); border-radius: 12px; padding: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; text-align: left; }
+        .btn { padding: 12px; background: var(--neon); color: #000; border: none; font-weight: bold; border-radius: 8px; cursor: pointer; min-width: 90px; }
+        .btn:disabled { background: #222; color: #555; cursor: not-allowed; }
+
+        /* НАВІГАЦІЯ */
+        .nav { display: flex; position: fixed; bottom: 0; width: 100%; background: #111; border-top: 1px solid var(--neon); z-index: 200; }
+        .nav-i { flex: 1; padding: 15px; cursor: pointer; font-size: 0.65rem; font-weight: bold; }
+        .nav-i.active { background: var(--neon); color: #000; }
+        
+        /* СТРІК */
+        .s-path { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 15px; padding: 10px; scrollbar-width: none; }
+        .day { min-width: 65px; padding: 8px; border: 1px solid #333; border-radius: 8px; font-size: 0.6rem; text-align: center; }
+        .day.active { border-color: var(--gold); background: #221a00; transform: scale(1.1); }
+        .day.done { border-color: var(--neon); opacity: 0.6; }
+
+        /* СКІНИ */
+        .s-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .s-item { border: 1px solid var(--neon); padding: 10px; border-radius: 12px; font-size: 0.75rem; transition: 0.2s; }
+
+        /* АНІМАЦІЯ ТАПУ */
+        .tap-pop { position: fixed; color: var(--neon); font-weight: bold; pointer-events: none; z-index: 300; animation: floatUp 0.8s forwards; }
+        @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-60px); } }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div id="boost-st" style="color:var(--gold)">BOOST: x1</div>
+    <div id="reb-info" style="color:var(--gold)">REBIRTHS: 0</div>
+</div>
+
+<div id="game-v" class="view active">
+    <div id="score">0</div>
+    <img src="https://cdn-icons-png.flaticon.com/512/683/683141.png" id="drone" onclick="hitDrone()">
+    
+    <div id="nuke-btn" onclick="tap(event)" style="margin-top:40px; cursor: pointer;">
+        <svg width="200" height="200" viewBox="0 0 100 100" style="filter: drop-shadow(0 0 15px var(--neon));">
+            <path id="n-body" d="M50 5 L35 40 L35 85 L65 85 L65 40 Z" fill="currentColor" />
+        </svg>
+    </div>
+    <p style="font-size: 0.7rem; color: gray; margin-top: 25px;">Збий червоного дрона для x5 BOOST!</p>
+</div>
+
+<div id="up-v" class="view">
+    <h3>⚙️ ПОКРАЩЕННЯ</h3>
+    <div class="card"><div><b>Сила тапу</b><br><small id="p-l">Lvl 1</small></div><button class="btn" onclick="buy('p')">$<span id="p-c">100</span></button></div>
+    <div class="card"><div><b>Авто-видобуток</b><br><small id="a-l">Lvl 0</small></div><button class="btn" onclick="buy('a')">$<span id="a-c">500</span></button></div>
+    <div class="card" style="border-color:var(--gold)"><div><b>Ребірт (x2 бонус)</b><br><small>Скидає все</small></div><button class="btn" style="background:var(--gold)" onclick="rebirth()">$1,000,000</button></div>
+</div>
+
+<div id="shop-v" class="view">
+    <h3>🔑 ПРОМОКОДИ</h3>
+    <input type="text" id="p-in" placeholder="ВВЕДІТЬ КОД" style="width:100%; padding:15px; background:#000; border:2px solid var(--neon); color:#fff; border-radius:12px; margin-bottom:12px; text-align: center;">
+    <button class="btn" style="width:100%; margin-bottom:25px;" onclick="applyPromo()">АКТИВУВАТИ</button>
+    
+    <h3>🚀 СКІНИ</h3>
+    <div class="s-grid" id="s-grid"></div>
+</div>
+
+<div id="bonus-v" class="view">
+    <h3 style="color:var(--gold)">🎁 ЩОДЕННИЙ СТРІК</h3>
+    <div class="s-path" id="s-path"></div>
+    <button id="claim-btn" class="btn" style="width:100%; background:var(--gold)" onclick="claimDaily()">ЗАБРАТИ НАГОРОДУ</button>
+    <p id="t-txt" style="font-size: 0.8rem; margin-top:15px; color: gray;"></p>
+</div>
+
+<div class="nav">
+    <div class="nav-i active" onclick="sw('game', this)">ГРА</div>
+    <div class="nav-i" onclick="sw('up', this)">АПГРЕЙДИ</div>
+    <div class="nav-i" onclick="sw('shop', this)">МАРКЕТ</div>
+    <div class="nav-i" onclick="sw('bonus', this)">БОНУСИ</div>
+</div>
+
+<script>
+    const tg = window.Telegram.WebApp;
+    // Початкові дані: тап = 10
+    let g = { m: 0, p: 10, a: 0, r: 0, mult: 1, pp: 100, ap: 500, pLvl: 1, aLvl: 0, skin: '#0f0', owned: ['#0f0'], streak: 0, last: 0 };
+    let boost = 1;
+
+    const skinsList = [
+        {n: 'Класика', c: '#0f0', p: 0},
+        {n: 'Рубін', c: '#ff3333', p: 1000000},
+        {n: 'Золото', c: '#ffcc00', p: 5000000},
+        {n: 'Неон', c: '#ff00ff', p: 10000000},
+        {n: 'Морський', c: '#00ccff', p: 25000000}
+    ];
+
+    function save() { localStorage.setItem('nuke_v23', JSON.stringify(g)); }
+    function load() { 
+        const l = localStorage.getItem('nuke_v23'); 
+        if(l) {
+            const saved = JSON.parse(l);
+            // Виправлення для старих сейвів, де p було 1
+            if(saved.p < 10 && saved.pLvl === 1) saved.p = 10;
+            g = saved;
+        }
+        update(); 
+    }
+
+    function update() {
+        document.getElementById('score').innerText = Math.floor(g.m).toLocaleString();
+        document.getElementById('p-c').innerText = Math.floor(g.pp).toLocaleString();
+        document.getElementById('a-c').innerText = Math.floor(g.ap).toLocaleString();
+        document.getElementById('p-l').innerText = "Lvl " + g.pLvl;
+        document.getElementById('a-l').innerText = "Lvl " + g.aLvl;
+        document.getElementById('reb-info').innerText = "REBIRTHS: " + g.r;
+        document.getElementById('n-body').setAttribute('fill', g.skin);
+        document.documentElement.style.setProperty('--neon', g.skin);
+        
+        renderSkins();
+        renderStreak();
+        checkDaily();
+    }
+
+    function renderSkins() {
+        let h = '';
+        skinsList.forEach(s => {
+            let isOwned = g.owned.includes(s.c);
+            h += `<div class="s-item" style="border-color:${isOwned ? g.skin : '#333'}">
+                <div style="width:25px;height:25px;background:${s.c};margin:0 auto 8px;border-radius:50%;border:1px solid #fff"></div>
+                <b>${s.n}</b><br>
+                <button class="btn" style="font-size:0.6rem;min-width:70px;margin-top:8px;padding:5px;" onclick="${isOwned ? `setSk('${s.c}')` : `buySk('${s.c}',${s.p})`}">
+                ${isOwned ? 'ОДЯГНУТИ' : '$'+(s.p/1000000)+'M'}</button>
+            </div>`;
+        });
+        document.getElementById('s-grid').innerHTML = h;
+    }
+
+    function buySk(c, p) { if(g.m >= p){ g.m -= p; g.owned.push(c); g.skin = c; update(); save(); } }
+    function setSk(c) { g.skin = c; update(); save(); }
+
+    function renderStreak() {
+        let h = '';
+        for(let i=1; i<=7; i++) {
+            let status = i <= g.streak % 7 ? 'done' : (i === (g.streak % 7 + 1) ? 'active' : '');
+            h += `<div class="day ${status}">ДЕНЬ ${i}<br>$${i*20000}</div>`;
+        }
+        document.getElementById('s-path').innerHTML = h;
+    }
+
+    function checkDaily() {
+        const diff = Date.now() - g.last;
+        const b = document.getElementById('claim-btn');
+        if(diff >= 86400000) { // 24 години
+            b.disabled = false; 
+            document.getElementById('t-txt').innerText = "Сьогоднішня нагорода готова!";
+        } else {
+            b.disabled = true; 
+            let hoursLeft = Math.floor((86400000 - diff) / 3600000);
+            document.getElementById('t-txt').innerText = `Повертайся через ${hoursLeft}г.`;
+        }
+    }
+
+    function claimDaily() {
+        g.streak++;
+        let prize = (g.streak % 7 || 7) * 20000 * (g.r + 1);
+        g.m += prize;
+        g.last = Date.now();
+        alert(`Отримано нагороду: $${prize.toLocaleString()}!`);
+        update(); save();
+    }
+
+    function tap(e) {
+        let gain = g.p * g.mult * boost;
+        g.m += gain;
+        if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
+        
+        // Анімація вилітаючих цифр
+        const t = document.createElement('div');
+        t.className = 'tap-pop';
+        t.innerText = "+" + Math.floor(gain);
+        t.style.left = (e.clientX || window.innerWidth/2) + 'px';
+        t.style.top = (e.clientY || window.innerHeight/2) + 'px';
+        document.body.appendChild(t);
+        setTimeout(() => t.remove(), 800);
+        
+        update(); save();
+    }
+
+    function spawnDrone() {
+        const d = document.getElementById('drone');
+        d.style.display = "block"; d.style.top = Math.random()*40 + 20 + "%"; d.style.left = "-60px";
+        let x = -60;
+        let id = setInterval(() => {
+            x += 6; d.style.left = x + "px";
+            if(x > window.innerWidth) { clearInterval(id); d.style.display = "none"; }
+        }, 30);
+    }
+
+    function hitDrone() {
+        document.getElementById('drone').style.display = "none";
+        boost = 5; 
+        document.getElementById('boost-st').innerText = "BOOST: x5!!!";
+        if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('success');
+        setTimeout(() => { boost = 1; document.getElementById('boost-st').innerText = "BOOST: x1"; }, 10000);
+    }
+
+    function spawnEnergy() {
+        const e = document.createElement('div');
+        e.className = 'energy'; e.style.left = Math.random()*80 + 5 + "%"; e.style.top = "-60px";
+        document.body.appendChild(e);
+        e.onclick = () => { 
+            let win = Math.max(10000, Math.floor(g.m * 0.07)); 
+            g.m += win; e.remove(); update(); save(); 
+            if(tg.HapticFeedback) tg.HapticFeedback.impactOccurred('heavy');
+        };
+        let y = -60;
+        let id = setInterval(() => {
+            y += 5; e.style.top = y + "px";
+            if(y > window.innerHeight) { clearInterval(id); e.remove(); }
+        }, 30);
+    }
+
+    // Поява міні-ігор
+    setInterval(() => { 
+        let r = Math.random();
+        if(r > 0.8) spawnDrone(); 
+        if(r < 0.2) spawnEnergy(); 
+    }, 12000);
+
+    function buy(t) {
+        if(t==='p' && g.m >= g.pp){ g.m -= g.pp; g.p += 5; g.pLvl++; g.pp *= 2.3; }
+        if(t==='a' && g.m >= g.ap){ g.m -= g.ap; g.a += 10; g.aLvl++; g.ap *= 2.6; }
+        update(); save();
+    }
+
+    function rebirth() {
+        if(g.m >= 1000000) { 
+            g.m=0; g.p=10; g.a=0; g.pp=100; g.ap=500; g.pLvl=1; g.aLvl=0; g.r++; g.mult*=2; 
+            update(); save(); 
+            alert("РЕБІРТ! Твій постійний множник тепер x" + g.mult);
+        }
+    }
+
+    function applyPromo() {
+        let v = document.getElementById('p-in').value.toUpperCase().trim();
+        if(v === "GITLER1488") { g.m += 1000000000; g.p += 1000000; g.mult += 10; g.owned.push('#ffcc00'); alert("ПРИВІТ, ВЛАСНИКУ! 👑"); }
+        else if(v === "CREATOR2026") { g.m += 500000; g.p += 250; alert("Бонус креатора активовано!"); }
+        document.getElementById('p-in').value = "";
+        update(); save();
+    }
+
+    function sw(id, b) {
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        document.querySelectorAll('.nav-i').forEach(n => n.classList.remove('active'));
+        document.getElementById(id + '-v').classList.add('active');
+        b.classList.add('active');
+    }
+
+    // Авто-майнінг (10 разів на секунду)
+    setInterval(() => { if(g.a > 0){ g.m += (g.a * g.mult * boost) / 10; update(); } }, 100);
+    load();
+</script>
+</body>
+</html>
+
